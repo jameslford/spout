@@ -1,0 +1,11 @@
+{
+    "clientType": "fetch",
+    "baseUrl": "https://api.example.com",
+    "includeTypes": true,
+    "outputPath": "./generated/client.ts",
+    "authMethod": "bearer",
+    "customHeaders": {
+        "X-API-Version": "v1"
+    },
+    "timeout": 10000
+}
