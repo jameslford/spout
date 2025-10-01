@@ -1,12 +1,14 @@
 """Core Spout functionality."""
 
-from typing import TYPE_CHECKING, List
+from typing import TYPE_CHECKING, Dict, List, Type
 
 from .detectors import detect_framework
 from .generators import GENERATORS, BaseClientGenerator
 from .models.cli_input import DetectInput, GenerateInput
 from .models.endpoint import Endpoint
 from .models.framework import FrameworkInfo
+from .parsers import DjangoNinjaParser, FastAPIParser
+from .shared.constants import SupportedFramework
 
 if TYPE_CHECKING:
     from .parsers.base import BaseParser
@@ -35,32 +37,36 @@ class SpoutDetector:
 class SpoutParser(SpoutDetector):
     """Class for parsing endpoints from the detected framework."""
 
+    FRAMEWORK_PARSER_MAP: Dict[SupportedFramework, Type[BaseParser]] = {
+        SupportedFramework.FASTAPI: FastAPIParser,
+        SupportedFramework.DJANGO_NINJA: DjangoNinjaParser,
+    }
+
     def __init__(self, input_data: DetectInput):
         """Initialize the parser."""
         self.input_data = input_data
         self._framework_info = None
         self._parser = None
+        self._endpoints = None
 
     @property
     def parser(self) -> "BaseParser":
         if self._parser is None:
-            if not self.framework_info.parser_class:
+            parser_class = self.FRAMEWORK_PARSER_MAP.get(self.framework_info.name)
+            if not parser_class:
                 raise ValueError(
-                    f"No parser available for framework {self.framework_info.name}"
+                    f"No parser available for framework: {self.framework_info.name}"
                 )
-            self._parser = self.framework_info.parser_class(
+            self._parser = parser_class(
                 self.input_data.path, self.framework_info.detected_files
             )
         return self._parser
 
-    def parse_endpoints(self) -> List[Endpoint]:
-        """
-        Parse endpoints from the detected framework.
-
-        Returns:
-            List of parsed endpoints
-        """
-        return self.parser.parse(self.input_data.path)
+    @property
+    def endpoints(self) -> List[Endpoint]:
+        if self._endpoints is None:
+            self._endpoints = self.parser.parse(self.input_data.path)
+        return self._endpoints
 
 
 class SpoutGenerator(SpoutParser):
@@ -107,5 +113,4 @@ class SpoutGenerator(SpoutParser):
             base_url=self.input_data.base_url,
             include_types=self.input_data.include_types,
         )
-        endpoints = self.parse_endpoints()
-        return generator.generate(endpoints)
+        return generator.generate(self.endpoints)
