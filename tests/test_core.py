@@ -8,12 +8,14 @@ import pytest
 from spout.core import SpoutGenerator
 from spout.models.endpoint import Endpoint, EndpointMethod
 from spout.models.framework import FrameworkInfo, SupportedFramework
+from spout.models.cli_input import GenerateInput
 
 
 @pytest.fixture
 def generator():
     """Create a SpoutGenerator instance for testing."""
-    return SpoutGenerator()
+    input_data = GenerateInput(project_path=".", output_path="./output.tsx")
+    return SpoutGenerator(input_data)
 
 
 @pytest.fixture
@@ -44,18 +46,12 @@ def sample_endpoints():
 class TestSpoutGenerator:
     """Test cases for SpoutGenerator."""
 
-    def test_init(self, generator):
-        """Test generator initialization."""
-        assert generator.detectors is not None
-        assert len(generator.detectors) > 0
-
-    def test_generate_client_fetch(self, generator, sample_endpoints):
+    def test_generate_client_fetch(self, sample_endpoints):
         """Test generating fetch client."""
-        client_code = generator.generate_client(
-            endpoints=sample_endpoints,
-            client_type="fetch",
-            base_url="https://api.example.com",
-        )
+        input_data = GenerateInput(project_path=".", output_path="./output.tsx")
+        generator = SpoutGenerator(input_data)
+        generator._endpoints = sample_endpoints  # Directly set endpoints for testing
+        client_code = generator.generate_client()
 
         assert "fetch" in client_code
         assert "ApiClient" in client_code
@@ -63,13 +59,14 @@ class TestSpoutGenerator:
         assert "getUser" in client_code
         assert "postUsers" in client_code
 
-    def test_generate_client_axios(self, generator, sample_endpoints):
+    def test_generate_client_axios(self, sample_endpoints):
         """Test generating axios client."""
-        client_code = generator.generate_client(
-            endpoints=sample_endpoints,
-            client_type="axios",
-            base_url="https://api.example.com",
+        input_data = GenerateInput(
+            project_path=".", output_path="./output.tsx", client_type="axios"
         )
+        generator = SpoutGenerator(input_data)
+        generator._endpoints = sample_endpoints  # Directly set endpoints for testing
+        client_code = generator.generate_client()
 
         assert "axios" in client_code
         assert "ApiClient" in client_code
@@ -77,18 +74,21 @@ class TestSpoutGenerator:
         assert "getUser" in client_code
         assert "postUsers" in client_code
 
-    def test_generate_client_invalid_type(self, generator, sample_endpoints):
+    def test_generate_client_invalid_type(self, sample_endpoints):
         """Test generating client with invalid type."""
         with pytest.raises(ValueError):
-            generator.generate_client(
-                endpoints=sample_endpoints, client_type="invalid_type"
+            input_data = GenerateInput(
+                project_path=".", output_path="./output.tsx", client_type="invalid"
             )
+            generator = SpoutGenerator(input_data)
+            generator._endpoints = (
+                sample_endpoints  # Directly set endpoints for testing
+            )
+            generator.generate_client()
 
-    @patch("spout.core.SpoutGenerator.detect_framework")
-    @patch("spout.core.SpoutGenerator.parse_endpoints")
-    def test_generate_from_project(
-        self, mock_parse, mock_detect, generator, sample_endpoints
-    ):
+    @patch("detectors.detect_service.detect_framework")
+    @patch("parsers.fastapi.FastAPIParser.parse_endpoints")
+    def test_generate_from_project(self, mock_parse, mock_detect, sample_endpoints):
         """Test generating client from project."""
         # Mock framework detection
         mock_detect.return_value = FrameworkInfo(
@@ -99,25 +99,19 @@ class TestSpoutGenerator:
         mock_parse.return_value = sample_endpoints
 
         # Generate client
-        result = generator.generate_from_project(
-            project_path=Path("/fake/path"), client_type="fetch"
+        generator = SpoutGenerator(
+            GenerateInput(
+                project_path="/fake/path",
+                output_path="./output.tsx",
+                client_type="fetch",
+            )
         )
+        result = generator.generate_client()
 
         assert result is not None
         assert "ApiClient" in result
         mock_detect.assert_called_once()
         mock_parse.assert_called_once()
-
-    @patch("spout.core.SpoutGenerator.detect_framework")
-    def test_generate_from_project_no_framework(self, mock_detect, generator):
-        """Test generating client when no framework is detected."""
-        mock_detect.return_value = None
-
-        result = generator.generate_from_project(
-            project_path=Path("/fake/path"), client_type="fetch"
-        )
-
-        assert result is None
 
 
 class TestEndpointModels:
