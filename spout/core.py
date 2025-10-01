@@ -1,79 +1,94 @@
 """Core Spout functionality."""
 
-from pathlib import Path
-from typing import List, Optional
+from typing import TYPE_CHECKING, List
 
-from .framework_detectors import DETECTORS
-from .generators import GENERATORS
-from .models.framework import FrameworkInfo
+from .detectors import detect_framework
+from .generators import GENERATORS, BaseClientGenerator
+from .models.cli_input import DetectInput, GenerateInput
 from .models.endpoint import Endpoint
+from .models.framework import FrameworkInfo
+
+if TYPE_CHECKING:
+    from .parsers.base import BaseParser
 
 
-class SpoutGenerator:
-    """Main class for generating TypeScript clients from Python frameworks."""
+class SpoutDetector:
+    """Class for detecting the web framework used in a Python project."""
 
-    def __init__(self):
-        """Initialize the generator."""
-        self.detectors = DETECTORS
+    def __init__(self, input_data: DetectInput):
+        """Initialize the detector."""
+        self.input_data = input_data
+        self._framework_info = None
 
-    def detect_framework(self, project_path: Path) -> Optional[FrameworkInfo]:
-        """
-        Detect the web framework used in the given project.
+    @property
+    def framework_info(self) -> FrameworkInfo:
+        if self._framework_info is None:
+            framework = detect_framework(self.input_data.path)
+            if not framework:
+                raise ValueError(
+                    f"No supported framework detected in {self.input_data.path}"
+                )
+            self._framework_info = framework
+        return self._framework_info
 
-        Args:
-            project_path: Path to the Python project
 
-        Returns:
-            FrameworkInfo if a supported framework is detected, None otherwise
-        """
-        best_match = None
-        best_confidence = 0.0
+class SpoutParser(SpoutDetector):
+    """Class for parsing endpoints from the detected framework."""
 
-        for detector in self.detectors:
-            framework_info = detector.detect(project_path)
-            if framework_info and framework_info.confidence > best_confidence:
-                best_match = framework_info
-                best_confidence = framework_info.confidence
+    def __init__(self, input_data: DetectInput):
+        """Initialize the parser."""
+        self.input_data = input_data
+        self._framework_info = None
+        self._parser = None
 
-        return best_match
+    @property
+    def parser(self) -> "BaseParser":
+        if self._parser is None:
+            if not self.framework_info.parser_class:
+                raise ValueError(
+                    f"No parser available for framework {self.framework_info.name}"
+                )
+            self._parser = self.framework_info.parser_class(
+                self.input_data.path, self.framework_info.detected_files
+            )
+        return self._parser
 
-    def parse_endpoints(
-        self, project_path: Path, framework_info: FrameworkInfo
-    ) -> List[Endpoint]:
+    def parse_endpoints(self) -> List[Endpoint]:
         """
         Parse endpoints from the detected framework.
-
-        Args:
-            project_path: Path to the Python project
-            framework_info: Information about the detected framework
 
         Returns:
             List of parsed endpoints
         """
-        # Find the appropriate detector for the framework
-        for detector in self.detectors:
-            # Check if this detector handles the framework
-            test_info = detector.detect(project_path)
-            if test_info and test_info.name == framework_info.name:
-                return detector.parse_endpoints(project_path, framework_info)
+        return self.parser.parse(self.input_data.path)
 
-        return []
 
-    def generate_client(
-        self,
-        endpoints: List[Endpoint],
-        client_type: str = "fetch",
-        base_url: str = "",
-        include_types: bool = True,
-    ) -> str:
+class SpoutGenerator(SpoutParser):
+    """Main class for generating TypeScript clients from Python frameworks."""
+
+    def __init__(self, input_data: GenerateInput):
+        """Initialize the generator."""
+        self.input_data = input_data
+        self._framework_info = None
+        self._parser = None
+        self._generator = None
+
+    @property
+    def generator(self) -> "BaseClientGenerator":
+        if self._generator is None:
+            if self.input_data.client_type not in GENERATORS:
+                raise ValueError(
+                    f"Unsupported client type: {self.input_data.client_type}. Available: {list(GENERATORS.keys())}"
+                )
+            self._generator = GENERATORS[self.input_data.client_type](
+                base_url=self.input_data.base_url,
+                include_types=self.input_data.include_types,
+            )
+        return self._generator
+
+    def generate_client(self) -> str:
         """
         Generate TypeScript client code from endpoints.
-
-        Args:
-            endpoints: List of API endpoints
-            client_type: Type of client to generate (fetch, axios, etc.)
-            base_url: Base URL for API calls
-            include_types: Whether to include TypeScript type definitions
 
         Returns:
             Generated TypeScript code
@@ -81,50 +96,16 @@ class SpoutGenerator:
         Raises:
             ValueError: If client_type is not supported
         """
-        if client_type not in GENERATORS:
+        if self.input_data.client_type not in GENERATORS:
             available = ", ".join(GENERATORS.keys())
             raise ValueError(
-                f"Unsupported client type: {client_type}. Available: {available}"
+                f"Unsupported client type: {self.input_data.client_type}. Available: {available}"
             )
 
-        generator_class = GENERATORS[client_type]
-        generator = generator_class(base_url=base_url, include_types=include_types)
-
-        return generator.generate(endpoints)
-
-    def generate_from_project(
-        self,
-        project_path: Path,
-        client_type: str = "fetch",
-        base_url: str = "",
-        include_types: bool = True,
-    ) -> Optional[str]:
-        """
-        Generate TypeScript client from a Python project.
-
-        Args:
-            project_path: Path to the Python project
-            client_type: Type of client to generate
-            base_url: Base URL for API calls
-            include_types: Whether to include TypeScript type definitions
-
-        Returns:
-            Generated TypeScript code if successful, None if no framework detected
-        """
-        # Detect framework
-        framework_info = self.detect_framework(project_path)
-        if not framework_info:
-            return None
-
-        # Parse endpoints
-        endpoints = self.parse_endpoints(project_path, framework_info)
-        if not endpoints:
-            return None
-
-        # Generate client
-        return self.generate_client(
-            endpoints=endpoints,
-            client_type=client_type,
-            base_url=base_url,
-            include_types=include_types,
+        generator_class = GENERATORS[self.input_data.client_type]
+        generator = generator_class(
+            base_url=self.input_data.base_url,
+            include_types=self.input_data.include_types,
         )
+        endpoints = self.parse_endpoints()
+        return generator.generate(endpoints)

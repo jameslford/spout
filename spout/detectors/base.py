@@ -4,8 +4,8 @@ from abc import ABC, abstractmethod
 from pathlib import Path
 from typing import List, Optional
 
-from ..models.framework import FrameworkInfo
 from ..models.endpoint import Endpoint
+from ..models.framework import FrameworkInfo
 
 
 class BaseFrameworkDetector(ABC):
@@ -21,22 +21,6 @@ class BaseFrameworkDetector(ABC):
 
         Returns:
             FrameworkInfo if detected, None otherwise
-        """
-        pass
-
-    @abstractmethod
-    def parse_endpoints(
-        self, project_path: Path, framework_info: FrameworkInfo
-    ) -> List[Endpoint]:
-        """
-        Parse endpoints from the detected framework.
-
-        Args:
-            project_path: Path to the project directory
-            framework_info: Information about the detected framework
-
-        Returns:
-            List of detected endpoints
         """
         pass
 

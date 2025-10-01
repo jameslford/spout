@@ -1,8 +1,8 @@
 """TypeScript client generators package."""
 
+from .axios import AxiosClientGenerator
 from .base import BaseClientGenerator
 from .fetch import FetchClientGenerator
-from .axios import AxiosClientGenerator
 
 # Registry of available generators
 GENERATORS = {

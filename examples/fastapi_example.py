@@ -1,8 +1,9 @@
 """Example FastAPI application for testing Spout."""
 
+from typing import List, Optional
+
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
-from typing import List, Optional
 
 app = FastAPI(title="Example API", version="1.0.0")
 

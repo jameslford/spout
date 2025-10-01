@@ -1,12 +1,13 @@
 """Basic tests for Spout functionality."""
 
-import pytest
 from pathlib import Path
 from unittest.mock import Mock, patch
 
+import pytest
+
 from spout.core import SpoutGenerator
-from spout.models.framework import FrameworkInfo, SupportedFramework
 from spout.models.endpoint import Endpoint, EndpointMethod
+from spout.models.framework import FrameworkInfo, SupportedFramework
 
 
 @pytest.fixture

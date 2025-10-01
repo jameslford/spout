@@ -1,8 +1,9 @@
 """Example Django Ninja application for testing Spout."""
 
+from typing import List, Optional
+
 from ninja import NinjaAPI
 from pydantic import BaseModel
-from typing import List, Optional
 
 api = NinjaAPI(title="Example Ninja API", version="1.0.0")
 

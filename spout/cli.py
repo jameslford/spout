@@ -7,8 +7,9 @@ from typing import Optional
 
 import click
 
-from .core import SpoutGenerator
+from .core import SpoutDetector, SpoutGenerator
 from .generators import GENERATORS
+from .models.cli_input import DetectInput, GenerateInput
 
 
 @click.group()
@@ -24,7 +25,8 @@ def main():
     "-i",
     "input_path",
     type=click.Path(exists=True, file_okay=False, dir_okay=True, path_type=Path),
-    required=True,
+    required=False,
+    default=Path("."),
     help="Path to the Python project directory",
 )
 @click.option(
@@ -32,7 +34,8 @@ def main():
     "-o",
     "output_path",
     type=click.Path(path_type=Path),
-    required=True,
+    default=Path("client.ts"),
+    required=False,
     help="Path for the generated TypeScript client file",
 )
 @click.option(
@@ -42,7 +45,7 @@ def main():
     default="fetch",
     help="Type of TypeScript client to generate",
 )
-@click.option("--base-url", "-b", default="", help="Base URL for API calls")
+@click.option("--base-url", "-b", default=None, help="Base URL for API calls")
 @click.option(
     "--no-types", is_flag=True, help="Do not include TypeScript type definitions"
 )
@@ -56,7 +59,7 @@ def generate(
     input_path: Path,
     output_path: Path,
     client_type: str,
-    base_url: str,
+    base_url: Optional[str],
     no_types: bool,
     config: Optional[Path],
     verbose: bool,
@@ -75,76 +78,30 @@ def generate(
             click.echo(f"Error loading configuration: {e}", err=True)
             sys.exit(1)
 
-    # Override config with command line options
-    final_config = {
-        "client_type": client_type,
-        "base_url": base_url,
-        "include_types": not no_types,
-        **config_data,
-    }
-
-    # Override with explicit command line arguments
-    if client_type != "fetch":  # fetch is default, so only override if explicitly set
-        final_config["client_type"] = client_type
-    if base_url:  # only override if provided
-        final_config["base_url"] = base_url
-    if no_types:  # only override if flag is set
-        final_config["include_types"] = False
-
+    final_config = GenerateInput(
+        project_path=str(input_path),
+        output_path=str(output_path),
+        client_type=client_type,
+        base_url=base_url,
+        include_types=not no_types,
+        config=config_data,
+    )
     if verbose:
-        click.echo(f"Input path: {input_path}")
-        click.echo(f"Output path: {output_path}")
-        click.echo(f"Configuration: {final_config}")
+        click.echo("Final configuration:")
+        for key, value in final_config.dict().items():
+            click.echo(f"  {key}: {value}")
 
     # Initialize generator
-    generator = SpoutGenerator()
-
-    # Detect framework
-    if verbose:
-        click.echo("Detecting framework...")
-
-    framework_info = generator.detect_framework(input_path)
-    if not framework_info:
-        click.echo("No supported framework detected in the project.", err=True)
-        click.echo("Supported frameworks: FastAPI, Django Ninja", err=True)
+    try:
+        generator = SpoutGenerator(final_config)
+    except Exception as e:
+        click.echo(f"Error initializing generator: {e}", err=True)
         sys.exit(1)
-
-    if verbose:
-        click.echo(
-            f"Detected framework: {framework_info.name} (confidence: {framework_info.confidence:.2f})"
-        )
-        click.echo(f"Detected files: {len(framework_info.detected_files)}")
-
-    # Parse endpoints
-    if verbose:
-        click.echo("Parsing endpoints...")
-
-    endpoints = generator.parse_endpoints(input_path, framework_info)
-    if not endpoints:
-        click.echo("No endpoints found in the project.", err=True)
-        sys.exit(1)
-
-    if verbose:
-        click.echo(f"Found {len(endpoints)} endpoints")
-        for endpoint in endpoints:
-            click.echo(
-                f"  {endpoint.method.value} {endpoint.path} -> {endpoint.function_name}"
-            )
+    client_code = generator.generate_client()
 
     # Generate client
     if verbose:
-        click.echo(f"Generating {final_config['client_type']} client...")
-
-    try:
-        client_code = generator.generate_client(
-            endpoints=endpoints,
-            client_type=final_config["client_type"],
-            base_url=final_config["base_url"],
-            include_types=final_config["include_types"],
-        )
-    except ValueError as e:
-        click.echo(f"Error generating client: {e}", err=True)
-        sys.exit(1)
+        click.echo(f"Generating {final_config.client_type} client...")
 
     # Write output
     try:
@@ -162,14 +119,22 @@ def generate(
     "-i",
     "input_path",
     type=click.Path(exists=True, file_okay=False, dir_okay=True, path_type=Path),
-    required=True,
+    required=False,
+    default=Path("."),
     help="Path to the Python project directory",
 )
-def detect(input_path: Path):
+@click.option("--verbose", "-v", is_flag=True, help="Enable verbose output")
+def detect(input_path: Path, verbose: bool):
     """Detect web framework in a Python project."""
 
-    generator = SpoutGenerator()
-    framework_info = generator.detect_framework(input_path)
+    config = DetectInput(project_path=str(input_path), verbose=verbose)
+
+    detector = SpoutDetector(config)
+    try:
+        framework_info = detector.framework_info
+    except Exception as e:
+        click.echo(f"Error during detection: {e}", err=True)
+        sys.exit(1)
 
     if framework_info:
         click.echo(f"✅ Framework detected: {framework_info.name}")

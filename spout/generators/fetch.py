@@ -2,8 +2,8 @@
 
 from typing import List
 
-from .base import BaseClientGenerator
 from ..models.endpoint import Endpoint, ParameterType
+from .base import BaseClientGenerator
 
 
 class FetchClientGenerator(BaseClientGenerator):
