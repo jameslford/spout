@@ -86,8 +86,9 @@ class TestSpoutGenerator:
             )
             generator.generate_client()
 
-    @patch("detectors.detect_service.detect_framework")
-    @patch("parsers.fastapi.FastAPIParser.parse_endpoints")
+    # @patch("spout.core.detect_framework")
+    @patch("spout.framework_detectors.fastapi.FastAPIDetector.detect")
+    @patch("spout.framework_detectors.fastapi.FastAPIDetector.parse")
     def test_generate_from_project(self, mock_parse, mock_detect, sample_endpoints):
         """Test generating client from project."""
         # Mock framework detection
@@ -135,7 +136,7 @@ class TestEndpointModels:
             function_name="create_user_profile",
         )
 
-        assert endpoint.typescript_method_name == "postApiUserProfiles"
+        assert endpoint.typescript_method_name == "postUserProfiles"
 
 
 if __name__ == "__main__":

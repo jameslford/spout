@@ -7,14 +7,18 @@ from .endpoint import (
     EndpointResponse,
     ParameterType,
 )
-from .framework import FrameworkInfo, SupportedFramework
+from .framework import FrameworkInfo, SupportedFramework, ParserInput
+from .cli_input import DetectInput, GenerateInput
 
 __all__ = [
+    "DetectInput",
+    "GenerateInput",
     "Endpoint",
     "EndpointMethod",
     "EndpointParameter",
     "EndpointResponse",
     "ParameterType",
+    "ParserInput",
     "FrameworkInfo",
     "SupportedFramework",
 ]

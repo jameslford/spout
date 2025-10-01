@@ -158,7 +158,7 @@ class FetchClientGenerator(BaseClientGenerator):
             lines.append("")
 
         # Build request options
-        method = endpoint.method.value
+        method = endpoint.method
         lines.append("    const options: RequestInit = {")
         lines.append(f"      method: '{method}',")
 

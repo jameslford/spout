@@ -1,14 +1,79 @@
+"""Django Ninja framework detector and parser."""
+
+import re
+from pathlib import Path
+from typing import Optional
 import ast
 from pathlib import Path
 from typing import List, Optional
 
-from ..models.endpoint import Endpoint, EndpointMethod, EndpointParameter, ParameterType
-from .base import BaseParser
+from ..models import (
+    Endpoint,
+    EndpointMethod,
+    EndpointParameter,
+    ParameterType,
+    FrameworkInfo,
+    SupportedFramework,
+)
+from .base import BaseFrameworkDetector
 
 
-class FastAPIParser(BaseParser):
-    def parse_endpoints(self) -> List[Endpoint]:
-        """Parse FastAPI endpoints from the project."""
+class DjangoNinjaDetector(BaseFrameworkDetector):
+    """Detector for Django Ninja framework."""
+
+    @classmethod
+    def detect(cls, project_path: Path) -> Optional[FrameworkInfo]:
+        """Detect Django Ninja framework in the project."""
+        confidence = 0.0
+        detected_files = []
+
+        # Check for django-ninja in requirements files
+        req_files = ["requirements.txt", "pyproject.toml", "Pipfile"]
+        for req_file in req_files:
+            req_path = project_path / req_file
+            if req_path.exists():
+                content = cls._read_file_safe(req_path)
+                if content and ("django-ninja" in content.lower()):
+                    confidence += 0.4
+                    detected_files.append(str(req_path))
+
+        # Check for Django settings
+        settings_files = list(project_path.rglob("settings.py"))
+        if settings_files:
+            confidence += 0.2
+            detected_files.extend([str(f) for f in settings_files])
+
+        # Check for Django Ninja imports in Python files
+        python_files = cls._find_python_files(project_path)
+        ninja_files = []
+
+        for py_file in python_files:
+            content = cls._read_file_safe(py_file)
+            if content:
+                # Look for Ninja imports
+                if re.search(r"from\s+ninja\s+import|import\s+ninja", content):
+                    confidence += 0.3
+                    ninja_files.append(str(py_file))
+
+                # Look for NinjaAPI instantiation
+                if re.search(r"NinjaAPI\s*\(|api\s*=\s*NinjaAPI", content):
+                    confidence += 0.3
+                    if str(py_file) not in ninja_files:
+                        ninja_files.append(str(py_file))
+
+        detected_files.extend(ninja_files)
+
+        if confidence >= 0.4:  # Minimum confidence threshold
+            return FrameworkInfo(
+                name=SupportedFramework.DJANGO_NINJA,
+                detected_files=detected_files,
+                confidence=min(confidence, 1.0),
+            )
+
+        return None
+
+    def parse(self) -> List[Endpoint]:
+        """Parse Django Ninja endpoints from the project."""
         endpoints = []
 
         for file_path_str in self.detected_files:
@@ -35,11 +100,11 @@ class FastAPIParser(BaseParser):
     def _parse_ast_for_endpoints(
         self, tree: ast.AST, file_path: Path
     ) -> List[Endpoint]:
-        """Parse AST tree for FastAPI endpoints."""
+        """Parse AST tree for Django Ninja endpoints."""
         endpoints = []
 
         for node in ast.walk(tree):
-            # Look for decorator calls like @app.get("/path")
+            # Look for decorator calls like @api.get("/path")
             if isinstance(node, ast.FunctionDef):
                 for decorator in node.decorator_list:
                     endpoint = self._parse_decorator_endpoint(
@@ -53,8 +118,8 @@ class FastAPIParser(BaseParser):
     def _parse_decorator_endpoint(
         self, decorator: ast.AST, func_node: ast.FunctionDef, file_path: Path
     ) -> Optional[Endpoint]:
-        """Parse a FastAPI decorator to extract endpoint information."""
-        # Handle @app.get(), @router.post(), etc.
+        """Parse a Django Ninja decorator to extract endpoint information."""
+        # Handle @api.get(), @router.post(), etc.
         if not isinstance(decorator, ast.Call):
             return None
 
@@ -95,14 +160,14 @@ class FastAPIParser(BaseParser):
         parameters = []
 
         for arg in func_node.args.args:
-            if arg.arg in ["self", "cls"]:  # Skip self/cls parameters
+            if arg.arg in ["self", "cls", "request"]:  # Skip Django-specific parameters
                 continue
 
             param_type = "any"  # Default type
             if arg.annotation:
                 param_type = self._ast_to_type_string(arg.annotation)
 
-            # Determine parameter type based on name patterns (simple heuristic)
+            # Determine parameter type based on name patterns
             if "path" in arg.arg.lower() or "id" in arg.arg.lower():
                 parameter_type = ParameterType.PATH
             elif "body" in arg.arg.lower() or "data" in arg.arg.lower():

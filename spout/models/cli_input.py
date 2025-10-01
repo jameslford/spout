@@ -18,7 +18,6 @@ class DetectInput(BaseModel):
 class GenerateInput(DetectInput):
     """Input model for CLI commands."""
 
-    project_path: str
     output_path: str
     include_types: bool = True
     client_type: str = "fetch"

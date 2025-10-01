@@ -1,6 +1,6 @@
 """Models for framework information and detection."""
 
-from typing import List, Optional
+from typing import Any, List, Optional
 
 from pydantic import BaseModel
 
@@ -21,3 +21,14 @@ class FrameworkInfo(BaseModel):
         """Pydantic configuration."""
 
         use_enum_values = True
+
+
+class ParserInput(BaseModel):
+    """Input model for parsers."""
+
+    file_path: str
+    config: Optional[dict[str, Any]] = None
+
+    @property
+    def path(self) -> str:
+        return self.file_path

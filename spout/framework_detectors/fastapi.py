@@ -1,14 +1,65 @@
+"""FastAPI framework detector and parser."""
+
 import ast
+import re
 from pathlib import Path
 from typing import List, Optional
 
 from ..models.endpoint import Endpoint, EndpointMethod, EndpointParameter, ParameterType
-from .base import BaseParser
+from ..models.framework import FrameworkInfo, SupportedFramework
+from .base import BaseFrameworkDetector
 
 
-class DjangoNinjaParser(BaseParser):
-    def parse_endpoints(self) -> List[Endpoint]:
-        """Parse Django Ninja endpoints from the project."""
+class FastAPIDetector(BaseFrameworkDetector):
+    """Detector for FastAPI framework."""
+
+    @classmethod
+    def detect(cls, project_path: Path) -> Optional[FrameworkInfo]:
+        """Detect FastAPI framework in the project."""
+        confidence = 0.0
+        detected_files = []
+
+        # Check for FastAPI in requirements files
+        req_files = ["requirements.txt", "pyproject.toml", "Pipfile"]
+        for req_file in req_files:
+            req_path = project_path / req_file
+            if req_path.exists():
+                content = cls._read_file_safe(req_path)
+                if content and ("fastapi" in content.lower()):
+                    confidence += 0.3
+                    detected_files.append(str(req_path))
+
+        # Check for FastAPI imports in Python files
+        python_files = cls._find_python_files(project_path)
+        fastapi_files = []
+
+        for py_file in python_files:
+            content = cls._read_file_safe(py_file)
+            if content:
+                # Look for FastAPI imports
+                if re.search(r"from\s+fastapi\s+import|import\s+fastapi", content):
+                    confidence += 0.2
+                    fastapi_files.append(str(py_file))
+
+                # Look for FastAPI app instantiation
+                if re.search(r"FastAPI\s*\(|app\s*=\s*FastAPI", content):
+                    confidence += 0.3
+                    if str(py_file) not in fastapi_files:
+                        fastapi_files.append(str(py_file))
+
+        detected_files.extend(fastapi_files)
+
+        if confidence >= 0.3:  # Minimum confidence threshold
+            return FrameworkInfo(
+                name=SupportedFramework.FASTAPI,
+                detected_files=detected_files,
+                confidence=min(confidence, 1.0),
+            )
+
+        return None
+
+    def parse(self) -> List[Endpoint]:
+        """Parse FastAPI endpoints from the project."""
         endpoints = []
 
         for file_path_str in self.detected_files:
@@ -35,11 +86,11 @@ class DjangoNinjaParser(BaseParser):
     def _parse_ast_for_endpoints(
         self, tree: ast.AST, file_path: Path
     ) -> List[Endpoint]:
-        """Parse AST tree for Django Ninja endpoints."""
+        """Parse AST tree for FastAPI endpoints."""
         endpoints = []
 
         for node in ast.walk(tree):
-            # Look for decorator calls like @api.get("/path")
+            # Look for decorator calls like @app.get("/path")
             if isinstance(node, ast.FunctionDef):
                 for decorator in node.decorator_list:
                     endpoint = self._parse_decorator_endpoint(
@@ -53,8 +104,8 @@ class DjangoNinjaParser(BaseParser):
     def _parse_decorator_endpoint(
         self, decorator: ast.AST, func_node: ast.FunctionDef, file_path: Path
     ) -> Optional[Endpoint]:
-        """Parse a Django Ninja decorator to extract endpoint information."""
-        # Handle @api.get(), @router.post(), etc.
+        """Parse a FastAPI decorator to extract endpoint information."""
+        # Handle @app.get(), @router.post(), etc.
         if not isinstance(decorator, ast.Call):
             return None
 
@@ -95,14 +146,14 @@ class DjangoNinjaParser(BaseParser):
         parameters = []
 
         for arg in func_node.args.args:
-            if arg.arg in ["self", "cls", "request"]:  # Skip Django-specific parameters
+            if arg.arg in ["self", "cls"]:  # Skip self/cls parameters
                 continue
 
             param_type = "any"  # Default type
             if arg.annotation:
                 param_type = self._ast_to_type_string(arg.annotation)
 
-            # Determine parameter type based on name patterns
+            # Determine parameter type based on name patterns (simple heuristic)
             if "path" in arg.arg.lower() or "id" in arg.arg.lower():
                 parameter_type = ParameterType.PATH
             elif "body" in arg.arg.lower() or "data" in arg.arg.lower():

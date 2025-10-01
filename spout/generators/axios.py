@@ -123,7 +123,7 @@ class AxiosClientGenerator(BaseClientGenerator):
 
         # Build axios config
         lines.append("    const requestConfig: AxiosRequestConfig = {")
-        lines.append(f"      method: '{endpoint.method.value.lower()}',")
+        lines.append(f"      method: '{endpoint.method.lower()}',")
         lines.append("      url,")
 
         # Add query parameters

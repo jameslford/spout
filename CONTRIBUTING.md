@@ -74,8 +74,8 @@ spout/
 
 1. Create a new detector in `src/spout/framework_detectors/`
 2. Inherit from `BaseFrameworkDetector`
-3. Implement `detect()` and `parse_endpoints()` methods
-4. Add to the `DETECTORS` list in `__init__.py`
+3. Implement `detect()` and `parse()` methods
+4. Add to the `DETECTORS` list in `framework_detectors/detection_service.py`
 5. Add tests in `tests/`
 
 ## Adding New Client Generators
