@@ -33,8 +33,8 @@ async def root():
     return {"message": "Hello World"}
 
 
-@app.get("/users", response_model=List[User])
-async def get_users(skip: int = 0, limit: int = 100):
+@app.get("/users")
+async def get_users(skip: int = 0, limit: int = 100) -> List[User]:
     """Get list of users."""
     # Mock data
     return [
@@ -43,8 +43,8 @@ async def get_users(skip: int = 0, limit: int = 100):
     ]
 
 
-@app.get("/users/{user_id}", response_model=User)
-async def get_user(user_id: int):
+@app.get("/users/{user_id}")
+async def get_user(user_id: int) -> User:
     """Get a specific user by ID."""
     if user_id == 1:
         return User(id=1, name="John Doe", email="john@example.com", age=30)
@@ -52,15 +52,15 @@ async def get_user(user_id: int):
         raise HTTPException(status_code=404, detail="User not found")
 
 
-@app.post("/users", response_model=User)
-async def create_user(user: UserCreate):
+@app.post("/users")
+async def create_user(user: UserCreate) -> User:
     """Create a new user."""
     new_user = User(id=999, **user.dict())
     return new_user
 
 
-@app.put("/users/{user_id}", response_model=User)
-async def update_user(user_id: int, user: UserUpdate):
+@app.put("/users/{user_id}")
+async def update_user(user_id: int, user: UserUpdate) -> User:
     """Update an existing user."""
     # Mock update
     updated_user = User(

@@ -54,6 +54,16 @@ class EndpointResponse(BaseModel):
     description: Optional[str] = None
 
 
+class TypeScriptInterface(BaseModel):
+    """Represents a TypeScript interface definition."""
+
+    name: str
+    fields: Dict[str, str]  # field_name -> typescript_type
+    optional_fields: List[str] = []  # List of optional field names
+    description: Optional[str] = None
+    source_model: Optional[str] = None  # Original Python model name
+
+
 class Endpoint(BaseModel):
     """Represents an API endpoint with all its metadata."""
 
@@ -65,6 +75,11 @@ class Endpoint(BaseModel):
     description: Optional[str] = None
     tags: List[str] = []
     deprecated: bool = False
+
+    # Return type information
+    return_type: Optional[str] = None  # TypeScript type string
+    python_return_type: Optional[str] = None  # Original Python type for reference
+    return_interface: Optional[TypeScriptInterface] = None  # Full interface definition
 
     # Framework-specific metadata
     framework_data: Dict[str, Any] = {}

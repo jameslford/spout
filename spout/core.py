@@ -38,7 +38,7 @@ class SpoutDetector:
     @property
     def endpoints(self) -> List[Endpoint]:
         if self._endpoints is None:
-            self._endpoints = self.detector.parse(self.input_data.path)
+            self._endpoints = self.detector.parse()
         return self._endpoints
 
 

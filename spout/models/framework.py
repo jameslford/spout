@@ -3,6 +3,7 @@
 from typing import Any, List, Optional
 
 from pydantic import BaseModel
+from pathlib import Path
 
 from ..shared.constants import SupportedFramework
 
@@ -14,7 +15,8 @@ class FrameworkInfo(BaseModel):
     version: Optional[str] = None
     entry_point: Optional[str] = None
     config_files: List[str] = []
-    detected_files: List[str] = []
+    detected_files: List[Path] = []
+    settings_file: Optional[str] = None
     confidence: float = 0.0  # 0.0 to 1.0
 
     class Config:

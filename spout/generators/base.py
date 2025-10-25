@@ -38,13 +38,18 @@ class BaseClientGenerator(ABC):
         if not self.include_types:
             return ""
 
-        types = set()
+        interfaces = {}  # name -> TypeScriptInterface
+        additional_types = set()
 
         for endpoint in endpoints:
+            # Collect return interfaces from Pydantic models
+            if endpoint.return_interface:
+                interfaces[endpoint.return_interface.name] = endpoint.return_interface
+
             # Generate parameter types
             for param in endpoint.parameters:
                 if param.type not in ["string", "number", "boolean", "any", "object"]:
-                    types.add(param.type)
+                    additional_types.add(param.type)
 
             # Generate response types
             for response in endpoint.responses:
@@ -55,19 +60,33 @@ class BaseClientGenerator(ABC):
                     "any",
                     "object",
                 ]:
-                    types.add(response.type)
+                    additional_types.add(response.type)
 
-        if not types:
+        if not interfaces and not additional_types:
             return ""
 
         type_definitions = ["// Type definitions"]
-        for type_name in sorted(types):
-            # This is a simplified type definition - in practice, you'd want
-            # more sophisticated type extraction from Python models
-            type_definitions.append(f"export interface {type_name} {{")
-            type_definitions.append("  // TODO: Extract actual type definition")
+
+        # Generate interfaces from Pydantic models
+        for interface_name, interface in sorted(interfaces.items()):
+            type_definitions.append(f"export interface {interface_name} {{")
+
+            for field_name, field_type in interface.fields.items():
+                optional_marker = "?" if field_name in interface.optional_fields else ""
+                type_definitions.append(
+                    f"  {field_name}{optional_marker}: {field_type};"
+                )
+
             type_definitions.append("}")
             type_definitions.append("")
+
+        # Generate placeholder interfaces for other types
+        for type_name in sorted(additional_types):
+            if type_name not in interfaces:  # Don't duplicate
+                type_definitions.append(f"export interface {type_name} {{")
+                type_definitions.append("  // TODO: Extract actual type definition")
+                type_definitions.append("}")
+                type_definitions.append("")
 
         return "\n".join(type_definitions)
 
